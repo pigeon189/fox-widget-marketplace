@@ -86,7 +86,7 @@ const marketplace = {
     version,
     source: `https://github.com/${SOURCE_REPO}/tree/${SOURCE_BRANCH}`,
     commit,
-    branch,
+    branch: SOURCE_BRANCH,
   },
   plugins: [entry],
 }
@@ -130,6 +130,7 @@ function buildMarketplace() {
   writeJson(path.join(out, '.codebuddy-plugin', 'marketplace.json'), marketplace)
   writeText(path.join(out, 'README.md'), marketplaceReadme())
   writeText(path.join(out, '.gitignore'), '*.log\n.DS_Store\nThumbs.db\n')
+  fs.copyFileSync(path.join(ROOT, '.gitattributes'), path.join(out, '.gitattributes'))
   return { out, payload }
 }
 
