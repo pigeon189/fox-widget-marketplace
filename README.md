@@ -4,7 +4,7 @@
 本仓库只有市场清单和插件副本，源码、问题与讨论都在源码仓库。
 
 - 当前版本：**v1.3.4**
-- 同步自：`pigeon189/zcode-fox-widget@workbuddy`（18bcf51）
+- 同步自：`pigeon189/zcode-fox-widget@workbuddy`（431b09f）
 - 平台：Windows（桌面浮层依赖 Win32；其余功能在 macOS / Linux 上只能用本地页面）
 
 ## 安装
