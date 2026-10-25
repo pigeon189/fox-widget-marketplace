@@ -41,6 +41,17 @@ const EXCLUDE = new Set([
   '.release-hashes.json.sig',
 ])
 
+// 官方投稿包再剔一层开发文件：审核看的是插件，不是仓库历史与 CI
+const DEV_EXCLUDE = [
+  '.github/',
+  'docs/',
+  '.gitignore',
+  '.gitattributes',
+  '.zcodeignore',
+  '.codebuddy-plugin/marketplace.json',
+]
+const isDevFile = (rel) => DEV_EXCLUDE.some((p) => (p.endsWith('/') ? rel.startsWith(p) : rel === p))
+
 const SHORT_DESC =
   'WorkBuddy 桌宠挂件：常驻右下角显示今日积分、本轮消耗 credit 与上下文余量，另有用量账本、六套角色、按压泡泡、桌宠模式与桌面浮层。'
 
@@ -63,20 +74,27 @@ const tracked = execFileSync('git', ['ls-files', '-z'], {
   .filter(Boolean)
   .filter((rel) => !EXCLUDE.has(rel))
 
-const entry = {
-  name: 'fox-widget',
-  description: SHORT_DESC,
-  description_en:
-    'A WorkBuddy desktop-pet widget showing today\'s credits, this turn\'s credit spend and context headroom, with a usage ledger, six characters, press bubbles, desktop-pet mode and a transparent always-on-top overlay.',
-  version,
-  source: './plugins/fox-widget',
-  category: 'productivity',
-  author: { name: 'pigeon189', url: 'https://github.com/pigeon189' },
-  homepage: `https://github.com/${SOURCE_REPO}/tree/${SOURCE_BRANCH}`,
-  repository: `https://github.com/${MARKETPLACE_REPO}`,
-  license: 'MIT',
-  keywords: Array.isArray(plugin.keywords) ? plugin.keywords : ['workbuddy', 'widget'],
+const filesFor = (variant) => tracked.filter((rel) => variant === 'a' || !isDevFile(rel))
+
+function makeEntry(source) {
+  return {
+    name: 'fox-widget',
+    description: SHORT_DESC,
+    description_en:
+      "A WorkBuddy desktop-pet widget showing today's credits, this turn's credit spend and context headroom, with a usage ledger, six characters, press bubbles, desktop-pet mode and a transparent always-on-top overlay.",
+    version,
+    source,
+    category: 'productivity',
+    author: { name: 'pigeon189', url: 'https://github.com/pigeon189' },
+    homepage: `https://github.com/${SOURCE_REPO}/tree/${SOURCE_BRANCH}`,
+    repository: `https://github.com/${MARKETPLACE_REPO}`,
+    license: 'MIT',
+    keywords: Array.isArray(plugin.keywords) ? plugin.keywords : ['workbuddy', 'widget'],
+  }
 }
+
+const entryA = makeEntry('./plugins/fox-widget')
+const entryB = makeEntry('./external_plugins/fox-widget')
 
 const marketplace = {
   name: MARKETPLACE_NAME,
@@ -88,7 +106,7 @@ const marketplace = {
     commit,
     branch: SOURCE_BRANCH,
   },
-  plugins: [entry],
+  plugins: [entryA],
 }
 
 function readJson(file) {
@@ -99,9 +117,9 @@ function rmrf(dir) {
   fs.rmSync(dir, { recursive: true, force: true })
 }
 
-function copyPayload(destRoot) {
+function copyPayload(destRoot, files) {
   let bytes = 0
-  for (const rel of tracked) {
+  for (const rel of files) {
     const src = path.join(ROOT, rel)
     const dst = path.join(destRoot, rel)
     fs.mkdirSync(path.dirname(dst), { recursive: true })
@@ -110,7 +128,7 @@ function copyPayload(destRoot) {
     if (process.platform !== 'win32' && mode & 0o111) fs.chmodSync(dst, 0o755)
     bytes += fs.statSync(dst).size
   }
-  return { files: tracked.length, bytes }
+  return { files: files.length, bytes }
 }
 
 function writeJson(file, data) {
@@ -126,7 +144,7 @@ function writeText(file, text) {
 function buildMarketplace() {
   const out = path.join(DIST, 'marketplace')
   rmrf(out)
-  const payload = copyPayload(path.join(out, 'plugins', 'fox-widget'))
+  const payload = copyPayload(path.join(out, 'plugins', 'fox-widget'), filesFor('a'))
   writeJson(path.join(out, '.codebuddy-plugin', 'marketplace.json'), marketplace)
   writeText(path.join(out, 'README.md'), marketplaceReadme())
   writeText(path.join(out, '.gitignore'), '*.log\n.DS_Store\nThumbs.db\n')
@@ -137,8 +155,8 @@ function buildMarketplace() {
 function buildOfficial() {
   const out = path.join(DIST, 'official-submission')
   rmrf(out)
-  const payload = copyPayload(path.join(out, 'plugins', 'fox-widget'))
-  writeJson(path.join(out, 'marketplace-entry.json'), entry)
+  const payload = copyPayload(path.join(out, 'external_plugins', 'fox-widget'), filesFor('b'))
+  writeJson(path.join(out, 'marketplace-entry.json'), entryB)
   writeText(path.join(out, 'PR.md'), officialPr())
   writeText(path.join(out, 'README.md'), officialReadme())
   return { out, payload }
@@ -202,7 +220,7 @@ function officialPr() {
 
 ## 一、要改的两处
 
-1. 把 \`plugins/fox-widget/\` 整个目录拷进官方仓库的 \`plugins/fox-widget/\`
+1. 把 \`external_plugins/fox-widget/\` 整个目录拷进官方仓库的 \`external_plugins/fox-widget/\`
 2. 在官方仓库根的 \`.codebuddy-plugin/marketplace.json\` 的 \`plugins\` 数组里追加一条
    （内容见本目录的 \`marketplace-entry.json\`，追加后保持原有的字段顺序风格）
 
@@ -252,17 +270,17 @@ node tools/smoke-ui.mjs          # 页面冒烟（无头浏览器）
 \`\`\`
 
 包内不含密钥、不含绝对路径、不含 node_modules；插件清单见
-\`plugins/fox-widget/.codebuddy-plugin/plugin.json\`，README 见 \`plugins/fox-widget/README.md\`。
+\`external_plugins/fox-widget/.codebuddy-plugin/plugin.json\`，README 见 \`external_plugins/fox-widget/README.md\`。
 
 ## 截图
 
-\`plugins/fox-widget/assets/example.png\`、\`assets/wb.png\`
+\`external_plugins/fox-widget/assets/example.png\`、\`assets/wb.png\`
 \`\`\`
 
 ## 三、提交前核对
 
 - [ ] 官方仓库 \`marketplace.json\` 里 \`name\` 不与既有插件重名（当前无 \`fox-widget\`）
-- [ ] \`plugins/fox-widget/.codebuddy-plugin/plugin.json\` 完整（\`name\` / \`version\` / \`description\` / \`license\` / \`author\`）
+- [ ] \`external_plugins/fox-widget/.codebuddy-plugin/plugin.json\` 完整（\`name\` / \`version\` / \`description\` / \`license\` / \`author\`）
 - [ ] 目录内含 \`README.md\` 与 \`LICENSE\`
 - [ ] 不含 \`.release-hashes.json*\`（本次已剔除）、不含私钥
 - [ ] 若官方要求英文描述，\`description_en\` 已随条目提供
@@ -279,7 +297,7 @@ function officialReadme() {
 
 本目录不是可直接运行的项目，只是给 \`cnb.cool/codebuddy/marketplace\` 提 PR 用的材料：
 
-- \`plugins/fox-widget/\` —— 原样拷进官方仓库的同名目录
+- \`external_plugins/fox-widget/\` —— 原样拷进官方仓库的同名目录（第三方插件都放这里）
 - \`marketplace-entry.json\` —— 追加到官方 \`.codebuddy-plugin/marketplace.json\` 的 \`plugins\` 数组
 - \`PR.md\` —— PR 标题、正文与提交前核对清单
 

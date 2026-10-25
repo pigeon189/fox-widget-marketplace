@@ -29,6 +29,15 @@ const EXCLUDE = new Set([
   '.release-hashes.json',
   '.release-hashes.json.sig',
 ])
+const DEV_EXCLUDE = [
+  '.github/',
+  'docs/',
+  '.gitignore',
+  '.gitattributes',
+  '.zcodeignore',
+  '.codebuddy-plugin/marketplace.json',
+]
+const isDevFile = (rel) => DEV_EXCLUDE.some((p) => (p.endsWith('/') ? rel.startsWith(p) : rel === p))
 
 const args = new Set(process.argv.slice(2))
 const SIMULATE = args.has('--simulate')
@@ -60,22 +69,24 @@ function walk(dir, out = []) {
   return out
 }
 
-function expectedFiles() {
+function expectedFiles(variant) {
   return execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     .split('\0')
     .filter(Boolean)
     .filter((rel) => !EXCLUDE.has(rel))
+    .filter((rel) => variant === 'a' || !isDevFile(rel))
     .sort()
 }
 
-const EXPECTED = expectedFiles()
+const EXPECTED = { a: expectedFiles('a'), b: expectedFiles('b') }
 
-function checkFileSet(pluginDir, label) {
+function checkFileSet(pluginDir, label, variant) {
   const actual = walk(pluginDir)
     .map((f) => path.relative(pluginDir, f).replace(/\\/g, '/'))
     .sort()
-  const missing = EXPECTED.filter((f) => !actual.includes(f))
-  const extra = actual.filter((f) => !EXPECTED.includes(f))
+  const expected = EXPECTED[variant]
+  const missing = expected.filter((f) => !actual.includes(f))
+  const extra = actual.filter((f) => !expected.includes(f))
   if (missing.length) fail(`${label}：包内缺 ${missing.length} 个文件（例：${missing.slice(0, 3).join('、')}）`)
   if (extra.length) fail(`${label}：包内多出 ${extra.length} 个文件（例：${extra.slice(0, 3).join('、')}）`)
 }
@@ -219,7 +230,7 @@ function checkMarketplace() {
     if (!pluginDir.startsWith(path.resolve(dir) + path.sep)) return fail(`A 线：${entry.name} source 指向市场外`)
     if (!fs.existsSync(pluginDir)) return fail(`A 线：${entry.name} source 目录不存在`)
     checkManifest(pluginDir, entry, `A/${entry.name}`)
-    checkFileSet(pluginDir, `A/${entry.name}`)
+    checkFileSet(pluginDir, `A/${entry.name}`, 'a')
     checkTextSafety(pluginDir, `A/${entry.name}`)
     checkSize(pluginDir, `A/${entry.name}`)
     if (fs.existsSync(path.join(pluginDir, '.release-hashes.json'))) fail(`A 线：包内不应带 .release-hashes.json`)
@@ -237,11 +248,13 @@ function checkOfficial() {
   for (const key of ['name', 'version', 'description', 'source', 'license']) {
     if (!entry[key]) fail(`B 线：marketplace-entry.json 缺 ${key}`)
   }
-  if (entry.source !== './plugins/fox-widget') fail(`B 线：source 应为 ./plugins/fox-widget（当前 ${entry.source}）`)
-  const pluginDir = path.join(dir, 'plugins', 'fox-widget')
-  if (!fs.existsSync(pluginDir)) return fail('B 线：plugins/fox-widget 不存在')
+  if (entry.source !== './external_plugins/fox-widget') {
+    fail(`B 线：source 应为 ./external_plugins/fox-widget（当前 ${entry.source}）`)
+  }
+  const pluginDir = path.join(dir, 'external_plugins', 'fox-widget')
+  if (!fs.existsSync(pluginDir)) return fail('B 线：external_plugins/fox-widget 不存在')
   checkManifest(pluginDir, entry, 'B/fox-widget')
-  checkFileSet(pluginDir, 'B/fox-widget')
+  checkFileSet(pluginDir, 'B/fox-widget', 'b')
   checkTextSafety(pluginDir, 'B/fox-widget')
   checkSize(pluginDir, 'B/fox-widget')
   for (const f of ['PR.md', 'README.md']) {
