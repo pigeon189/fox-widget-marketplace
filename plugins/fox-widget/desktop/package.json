@@ -1,0 +1,7 @@
+{
+  "name": "fox-widget-overlay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Transparent always-on-top overlay window that hosts the WorkBuddy Fox Widget (fox-widget).",
+  "main": "main.cjs"
+}
